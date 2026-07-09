@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cross-Asset Briefing — {{ data.as_of }}</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --ink:#1a1d24; --muted:#6b7280; --line:#e5e7eb;
+          --up:#0a7d43; --dn:#c02626; --flat:#6b7280; --accent:#1f3a5f; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font:14px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; }
+  .wrap { max-width:960px; margin:0 auto; padding:24px 16px 60px; }
+  header { background:var(--accent); color:#fff; border-radius:10px; padding:20px 22px; }
+  header h1 { margin:0; font-size:20px; letter-spacing:.2px; }
+  header .sub { opacity:.85; font-size:13px; margin-top:4px; }
+  .badges { margin-top:12px; display:flex; gap:8px; flex-wrap:wrap; }
+  .badge { background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.25);
+           padding:4px 10px; border-radius:999px; font-size:12px; }
+  section { background:var(--card); border:1px solid var(--line); border-radius:10px;
+            padding:18px 20px; margin-top:16px; }
+  h2 { font-size:14px; text-transform:uppercase; letter-spacing:.6px; color:var(--accent);
+       margin:0 0 12px; border-bottom:2px solid var(--line); padding-bottom:6px; }
+  h3 { font-size:13px; color:var(--muted); margin:16px 0 6px; }
+  .narrative p { margin:0 0 10px; }
+  table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; }
+  th,td { text-align:right; padding:5px 8px; border-bottom:1px solid var(--line); font-size:13px; }
+  th:first-child, td:first-child { text-align:left; }
+  th { color:var(--muted); font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.4px; }
+  .up { color:var(--up); } .dn { color:var(--dn); } .flat { color:var(--flat); }
+  .dir { font-weight:700; }
+  .grp { color:var(--accent); font-weight:700; background:#f0f3f7; }
+  img { width:100%; height:auto; border:1px solid var(--line); border-radius:8px; margin-top:6px; }
+  .sig { font-style:italic; color:var(--muted); }
+  footer { color:var(--muted); font-size:12px; margin-top:20px; text-align:center; }
+  .overflow { overflow-x:auto; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0f1216; --card:#171b21; --ink:#e6e8eb; --muted:#9aa4b2; --line:#2a2f37;
+            --accent:#7aa2d6; --up:#37c871; --dn:#f0655f; --flat:#9aa4b2; }
+    .grp { background:#1e2530; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+{% macro dircls(d) %}{% if d>0 %}up{% elif d<0 %}dn{% else %}flat{% endif %}{% endmacro %}
+{% macro dirsym(d) %}{% if d>0 %}▲ long{% elif d<0 %}▼ short{% else %}– flat{% endif %}{% endmacro %}
+
+<header>
+  <h1>Cross-Asset Market Briefing</h1>
+  <div class="sub">As of {{ data.as_of }} · generated {{ data.generated_at }} · narrative: {{ data.narrative_source }}</div>
+  <div class="badges">
+    <span class="badge">Vol regime: {{ data.regime.threshold.regime }} (z={{ "%.2f"|format(data.regime.threshold.z) }})</span>
+    <span class="badge">Realized vol: {{ "%.1f"|format(data.regime.threshold.vol*100) }}%</span>
+    <span class="badge">Markov P(high-vol): {{ "%.2f"|format(data.regime.markov.p_high) }}</span>
+  </div>
+</header>
+
+<section class="narrative">
+  <h2>Market narrative</h2>
+  {% for para in data.narrative.split('\n\n') %}<p>{{ para }}</p>{% endfor %}
+</section>
+
+<section>
+  <h2>Levels &amp; moves</h2>
+  <div class="overflow"><table>
+    <tr><th>Asset</th><th>Class</th><th>Level</th><th>Change</th><th>Source</th></tr>
+    {% for r in data.levels %}
+    <tr>
+      <td>{{ r.asset_id }}</td><td>{{ r.asset_class }}</td>
+      <td>{{ "%.4g"|format(r.value) }}</td>
+      <td class="{{ dircls(r.change) }}">{{ "%+.4g"|format(r.change) }}</td>
+      <td class="sig">{{ r.source }}</td>
+    </tr>
+    {% endfor %}
+  </table></div>
+</section>
+
+<section>
+  <h2>Signals fired today</h2>
+  <h3>Time-series momentum (126d) &amp; carry — direction and score</h3>
+  <div class="overflow"><table>
+    <tr><th>Signal</th><th>Asset</th><th>Class</th><th>Direction</th><th>Score</th></tr>
+    {% for s in data.signals_today.momentum %}
+    <tr><td>momentum</td><td>{{ s.asset_id }}</td><td>{{ s.asset_class }}</td>
+        <td class="dir {{ dircls(s.direction) }}">{{ dirsym(s.direction) }}</td>
+        <td>{{ "%.4f"|format(s.score) if s.score is not none else "—" }}</td></tr>
+    {% endfor %}
+    {% for s in data.signals_today.carry %}
+    <tr><td>carry</td><td>{{ s.asset_id }}</td><td>{{ s.asset_class }}</td>
+        <td class="dir {{ dircls(s.direction) }}">{{ dirsym(s.direction) }}</td>
+        <td>{{ "%.4f"|format(s.score) if s.score is not none else "—" }}</td></tr>
+    {% endfor %}
+  </table></div>
+
+  <h3>Backtested performance (net of costs)</h3>
+  <div class="overflow"><table>
+    <tr><th>Strategy</th><th>Periods</th><th>Hit %</th><th>Sharpe (net)</th><th>Ann ret % (net)</th><th>Max DD %</th></tr>
+    {% for name, s in data.signal_stats.items() %}
+    <tr><td>{{ name }}</td><td>{{ s.n }}</td>
+        <td>{{ "%.0f"|format(s.hit*100) }}</td>
+        <td class="{{ dircls(s.sharpe_net) }}">{{ "%+.2f"|format(s.sharpe_net) }}</td>
+        <td class="{{ dircls(s.ann_ret_net) }}">{{ "%+.2f"|format(s.ann_ret_net*100) }}</td>
+        <td class="dn">{{ "%.1f"|format(s.maxdd*100) }}</td></tr>
+    {% endfor %}
+  </table></div>
+</section>
+
+<section>
+  <h2>Yield curve &amp; RV screens</h2>
+  <img alt="Treasury curve" src="data:image/png;base64,{{ chart_curve }}">
+
+  <h3>Slope screens (DV01-neutral)</h3>
+  <div class="overflow"><table>
+    <tr><th>Trade</th><th>Slope (bp)</th><th>Z-score</th><th>Signal</th><th>Front units / back unit</th></tr>
+    {% for s in data.curve.slopes %}
+    <tr><td>{{ s.name }}</td><td>{{ "%.0f"|format(s.slope_bp) }}</td>
+        <td class="{{ dircls(s.zscore) }}">{{ "%+.2f"|format(s.zscore) }}</td>
+        <td class="sig">{{ s.signal }}</td>
+        <td>{{ "%.2f"|format(s.hedge_ratio_short_per_long) }}</td></tr>
+    {% endfor %}
+  </table></div>
+
+  <h3>Butterfly screens</h3>
+  <div class="overflow"><table>
+    <tr><th>Fly</th><th>Level (bp)</th><th>Z-score</th><th>Signal</th></tr>
+    {% for b in data.curve.butterflies %}
+    <tr><td>{{ b.name }}</td><td>{{ "%.0f"|format(b.fly_bp) }}</td>
+        <td class="{{ dircls(b.zscore) }}">{{ "%+.2f"|format(b.zscore) }}</td>
+        <td class="sig">{{ b.signal }}</td></tr>
+    {% endfor %}
+  </table></div>
+
+  <h3>Carry + rolldown per DV01 ({{ data.curve.horizon_months }}m horizon) —
+      richest {{ data.curve.richest }}, cheapest {{ data.curve.cheapest }}</h3>
+  <img alt="Carry and rolldown per DV01" src="data:image/png;base64,{{ chart_roll }}">
+  <div class="overflow"><table>
+    <tr><th>Tenor</th><th>Yield %</th><th>Roll (bp)</th><th>Carry %</th><th>Roll %</th><th>Total %</th><th>/ DV01</th></tr>
+    {% for p in data.curve.carry_roll %}
+    <tr><td>{{ p.tenor }}</td><td>{{ "%.2f"|format(p.yield_pct) }}</td>
+        <td class="{{ dircls(p.roll_yield_bp) }}">{{ "%+.1f"|format(p.roll_yield_bp) }}</td>
+        <td>{{ "%.3f"|format(p.carry_return_pct) }}</td>
+        <td>{{ "%.3f"|format(p.rolldown_return_pct) }}</td>
+        <td>{{ "%.3f"|format(p.total_return_pct) }}</td>
+        <td>{{ "%.2f"|format(p.total_per_dv01) }}</td></tr>
+    {% endfor %}
+  </table></div>
+</section>
+
+<footer>
+  Every number above is reproduced in <code>briefing_{{ data.as_of }}.json</code>.
+  Signals are systematic and backtested; this is a research artifact, not investment advice.
+</footer>
+</div>
+</body>
+</html>

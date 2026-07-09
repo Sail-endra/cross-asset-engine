@@ -1,0 +1,118 @@
+# Instrument universe for the Cross-Asset Market Monitor.
+#
+# This is the single source of truth for what the pipeline pulls. Signals,
+# the curve module, and the briefing all read from MarketData, which reads
+# this file -- nothing downstream should hardcode a series ID or symbol.
+#
+# Series IDs verified live against api.stlouisfed.org and alphavantage.co
+# on 2026-07-08. See README "Data Sources" for how to re-verify.
+
+rates:
+  # FRED constant-maturity Treasury par yields (daily, percent).
+  curve:
+    - tenor: "1M"
+      series_id: DGS1MO
+    - tenor: "3M"
+      series_id: DGS3MO
+    - tenor: "6M"
+      series_id: DGS6MO
+    - tenor: "1Y"
+      series_id: DGS1
+    - tenor: "2Y"
+      series_id: DGS2
+    - tenor: "3Y"
+      series_id: DGS3
+    - tenor: "5Y"
+      series_id: DGS5
+    - tenor: "7Y"
+      series_id: DGS7
+    - tenor: "10Y"
+      series_id: DGS10
+    - tenor: "20Y"
+      series_id: DGS20
+    - tenor: "30Y"
+      series_id: DGS30
+
+short_rates:
+  # Per-currency short rates used by FX carry (r_base - r_quote). Sourced
+  # from FRED. Where a clean daily policy/overnight rate exists we use it;
+  # JPY and AUD have no current daily series on FRED, so we fall back to the
+  # OECD 3-month interbank rate (monthly, ~2-month publication lag) and let
+  # the carry module forward-fill it to the FX trading calendar. Forward-fill
+  # is an explicit alignment step -- a policy rate is a step function that
+  # only moves at meetings -- not fabricated data. Values are in percent.
+  # The monthly series carry frequency: monthly so the gap check tolerates
+  # their ~30-day spacing instead of failing it as a data gap.
+  - currency: USD
+    series_id: DFF
+    label: "US Effective Federal Funds Rate (daily)"
+  - currency: EUR
+    series_id: ECBDFR
+    label: "ECB Deposit Facility Rate (daily)"
+  - currency: GBP
+    series_id: IUDSOIA
+    label: "UK SONIA overnight rate (daily)"
+  - currency: JPY
+    series_id: IR3TIB01JPM156N
+    label: "Japan 3-month interbank rate (monthly, OECD)"
+    frequency: monthly
+  - currency: AUD
+    series_id: IR3TIB01AUM156N
+    label: "Australia 3-month interbank rate (monthly, OECD)"
+    frequency: monthly
+
+credit:
+  # ICE BofA Option-Adjusted Spread. FRED reports these in PERCENT, not
+  # basis points (e.g. 0.75 == 0.75% == 75bp) -- Phase 3 credit-carry logic
+  # must treat the raw value as percent. Note: FRED caps these ICE series to
+  # a rolling ~3-year window as of a 2026 policy change, so backtests on
+  # credit carry are necessarily short-history.
+  - asset_id: US_IG_OAS
+    series_id: BAMLC0A0CM
+    label: "ICE BofA US Corporate Index OAS (investment grade)"
+  - asset_id: US_HY_OAS
+    series_id: BAMLH0A0HYM2
+    label: "ICE BofA US High Yield Index OAS"
+
+equities:
+  # US equity indices from FRED (free, long daily history), NOT Alpha Vantage.
+  # Reason: as of a 2026 change, Alpha Vantage's TIME_SERIES_DAILY caps the
+  # free tier at outputsize=compact (~100 trading days) -- too short for the
+  # 126/252-day momentum lookbacks and multi-year backtests this project needs.
+  # FRED serves these index levels with 10+ years of daily history for free.
+  #
+  # Caveat carried forward to Phase 2: these are PRICE indices, not total
+  # return -- they exclude dividends. That is a small drift that rarely flips
+  # a momentum sign, but the momentum docstring notes it explicitly.
+  #
+  # History depth: NASDAQCOM goes back to 1990; SP500 and DJIA are capped at
+  # ~10 years by FRED's S&P/Dow licensing terms. No clean free daily source
+  # exists for developed-ex-US / EM indices, so the universe is US-only here.
+  - asset_id: SP500
+    series_id: SP500
+    label: "S&P 500 (US large cap)"
+  - asset_id: NASDAQCOM
+    series_id: NASDAQCOM
+    label: "Nasdaq Composite (US tech-heavy)"
+  - asset_id: DJIA
+    series_id: DJIA
+    label: "Dow Jones Industrial Average (US large cap)"
+
+fx:
+  # Major pairs, quoted from_symbol/to_symbol per Alpha Vantage's FX_DAILY.
+  - asset_id: EURUSD
+    from_symbol: EUR
+    to_symbol: USD
+    label: "Euro / US Dollar"
+  - asset_id: USDJPY
+    from_symbol: USD
+    to_symbol: JPY
+    label: "US Dollar / Japanese Yen"
+  - asset_id: GBPUSD
+    from_symbol: GBP
+    to_symbol: USD
+    label: "British Pound / US Dollar"
+  - asset_id: AUDUSD
+    from_symbol: AUD
+    to_symbol: USD
+    label: "Australian Dollar / US Dollar"

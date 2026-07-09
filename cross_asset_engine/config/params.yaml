@@ -1,0 +1,71 @@
+# Global parameters. Expanded in later phases (signal lookbacks, backtest
+# horizons, transaction costs); Phase 1 only needs the data-layer settings.
+
+data:
+  cache_dir: cache
+  # Earliest date requested from FRED. Alpha Vantage ignores this and always
+  # pulls its own full history (outputsize=full); FRED needs an explicit start.
+  fred_observation_start: "1990-01-01"
+  # A daily series with no observation for longer than this many calendar
+  # days is treated as a data gap and fails loudly rather than being silently
+  # accepted (weekends/holidays are already filtered out before this check).
+  max_gap_calendar_days: 10
+  # Series explicitly marked frequency: monthly (e.g. OECD foreign rates) are
+  # allowed this larger spacing before the gap check trips.
+  max_gap_calendar_days_monthly: 45
+
+signals:
+  momentum:
+    # Trailing-return lookbacks in trading days (~3m, 6m, 12m).
+    lookbacks: [63, 126, 252]
+  regime:
+    # RiskMetrics-style EWMA decay for realized volatility, and the risk
+    # asset whose vol defines the market regime.
+    ewma_lambda: 0.94
+    risk_asset: SP500
+    # Carry-exposure multiplier per regime: carry underperforms in stress,
+    # so it is scaled down as the regime worsens.
+    carry_scale:
+      LOW: 1.0
+      NORMAL: 1.0
+      HIGH: 0.5
+      CRISIS: 0.25
+
+briefing:
+  # Rules-based templating is the default narrative. The LLM pass is opt-in
+  # (--llm flag on run_daily) and is strictly numbers-in: the model is given
+  # only the computed JSON and instructed never to invent figures.
+  llm_model: claude-opus-4-8
+  # z-score magnitude at which an RV screen is called out as rich/cheap.
+  rv_flag_zscore: 1.0
+
+backtest:
+  # Holding horizon in trading days; positions are formed with data up to t and
+  # earn the non-overlapping forward return over the next `horizon` days.
+  horizon_days: 21
+  # Round-trip transaction cost in basis points, applied to traded notional.
+  cost_bps: 2.0
+  # Risk-free rate (annual %) used in the Sharpe ratio. 0 by default, noted.
+  risk_free_pct: 0.0
+  # Momentum lookback used for the headline backtest (kept to one value to
+  # avoid parameter-mining; the sweep helper reports the spread across all
+  # configured lookbacks rather than cherry-picking the best).
+  momentum_lookback: 126
+
+curve:
+  # Semiannual bootstrap grid (Treasury coupons are semiannual) and the
+  # interpolation used to fill the par curve onto that grid.
+  bootstrap_step_years: 0.5
+  interpolation: linear        # linear | cubic  (on par yields)
+  # Rolling window (trading days) for z-scoring RV screens vs their own history.
+  zscore_window: 252
+  # Horizon for carry-and-rolldown (how far the bond rolls down the curve).
+  carry_rolldown_horizon_months: 3
+  # Slope trades: long-leg yield minus short-leg yield (a steepener profits
+  # when this rises). Sized DV01-neutral so the trade expresses slope not level.
+  slopes:
+    - {name: "2s10s", short: "2Y", long: "10Y"}
+    - {name: "5s30s", short: "5Y", long: "30Y"}
+  # Butterflies: 2*belly - wing_short - wing_long (curvature, not level).
+  butterflies:
+    - {name: "2s5s10s", wing_short: "2Y", belly: "5Y", wing_long: "10Y"}
