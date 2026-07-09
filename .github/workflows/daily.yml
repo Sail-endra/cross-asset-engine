@@ -1,0 +1,69 @@
+name: Daily briefing
+
+# Regenerates the self-contained briefing on a schedule and publishes it to
+# GitHub Pages. API keys come ONLY from repository Actions secrets -- they are
+# never stored in the repo. See the README (Phase 6) for the one-time setup.
+
+on:
+  schedule:
+    # 11:00 UTC on weekdays. FRED/Alpha Vantage publish the prior session with a
+    # lag, so a late-morning-UTC run captures the most recent complete data.
+    - cron: "0 11 * * 1-5"
+  workflow_dispatch: {}   # allows manual runs from the Actions tab
+
+# Least-privilege permissions: read the repo, write a Pages deployment.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never run two publishes at once; don't cancel an in-flight deploy.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv (pinned)
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.11"
+          enable-cache: true
+
+      - name: Install dependencies (from lockfile)
+        run: uv sync --frozen
+
+      - name: Generate briefing
+        env:
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+          ALPHAVANTAGE_API_KEY: ${{ secrets.ALPHAVANTAGE_API_KEY }}
+        run: uv run python scripts/run_daily.py
+
+      # Downloadable copy of the HTML + JSON for every run (works even if Pages
+      # is not enabled).
+      - name: Upload briefing artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: briefing
+          path: docs/
+
+      - name: Package docs/ for Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

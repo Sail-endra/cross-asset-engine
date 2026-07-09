@@ -4,8 +4,9 @@ A single market-data spine feeding three outputs: systematic cross-asset
 trade signals with backtested performance, a fixed-income yield-curve
 relative-value screen, and an auto-generated daily HTML market briefing.
 
-**Status: Phases 1–5 complete** (data spine + signals + curve/RV + backtester +
-daily briefing). Only the GitHub Actions automation (Phase 6) remains.
+**Status: all six phases complete** — data spine, signal engine, yield-curve
+RV screens, backtester, daily briefing, and scheduled publishing via GitHub
+Actions + Pages.
 
 ## Setup
 
@@ -220,6 +221,35 @@ written narrative.
 uv run python scripts/run_daily.py          # rules-based narrative (default)
 uv run python scripts/run_daily.py --llm    # optional Anthropic narrative pass
 ```
+
+## Automation & publishing (Phase 6)
+
+`.github/workflows/daily.yml` regenerates the briefing on a schedule (11:00 UTC
+weekdays, plus a manual **Run workflow** button) and publishes it to GitHub
+Pages. API keys come **only** from repository Actions secrets — never from the
+repo. Every run also uploads the HTML + JSON as a downloadable build artifact.
+
+**One-time setup:**
+
+1. **Add the secrets.** Repo → **Settings → Secrets and variables → Actions →
+   New repository secret**. Add two:
+   - `FRED_API_KEY`
+   - `ALPHAVANTAGE_API_KEY`
+
+   (`ANTHROPIC_API_KEY` is only needed if you later run the workflow with the
+   `--llm` narrative flag.)
+
+2. **Enable Pages via Actions.** Repo → **Settings → Pages → Build and
+   deployment → Source → GitHub Actions**. (Not "Deploy from a branch" — this
+   workflow deploys the artifact directly, so nothing is committed back to the
+   repo.)
+
+3. **Run it.** Repo → **Actions → Daily briefing → Run workflow**. When it goes
+   green, the briefing is live at
+   `https://<username>.github.io/<repo>/` (linked from the deploy job's summary).
+
+The scheduled job then keeps that page current every weekday. Free-tier usage
+is tiny (one run/day, ~4 Alpha Vantage calls), well inside the 25-requests/day cap.
 
 ## Testing
 
